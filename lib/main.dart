@@ -16,9 +16,11 @@ import 'height_result.dart';
 void main() => runApp(const StuntingApp());
 
 // 1. URL HUGGING FACE (Untuk Otak/AI)
+// NOTE: Jangan ditambah /measure lagi nanti di bawah, pakai link bersih ini
 const hfBaseUrl = 'https://syahhh01-stunting-detector-app.hf.space/predict-image';
 
 // 2. URL GOOGLE CLOUD (Untuk Database & Storage)
+// Ini mengarah ke backend Python Cloud Run kamu
 const cloudBaseUrl = 'https://stunting-server-376046612572.us-central1.run.app';
 
 class StuntingApp extends StatelessWidget {
@@ -158,7 +160,7 @@ class _CameraAndUploadPageState extends State<CameraAndUploadPage> {
   final _picker = ImagePicker();
   XFile? _captured;
   bool _busy = false;
-  String _statusText = ""; // Untuk update teks loading
+  String _statusText = "";
   String? _error;
 
   Future<void> _takeAndSend() async {
@@ -189,11 +191,12 @@ class _CameraAndUploadPageState extends State<CameraAndUploadPage> {
       // ---------------------------------------------------
       // 1. KIRIM KE HUGGING FACE (Untuk Prediksi)
       // ---------------------------------------------------
-      // Asumsi endpoint di HF Space adalah /predict atau /measure (sesuaikan dengan kode python HF kamu)
-      final hfUri = Uri.parse('$hfBaseUrl/measure');
+      // [FIX] Langsung parse URL tanpa nambah '/measure'
+      final hfUri = Uri.parse(hfBaseUrl);
 
       final hfReq = http.MultipartRequest('POST', hfUri)
-        ..files.add(await http.MultipartFile.fromPath('image', shot.path, filename: 'hf_check.jpg'));
+      // [FIX] Menggunakan key 'file' bukan 'image' agar sesuai dengan kode yang jalan
+        ..files.add(await http.MultipartFile.fromPath('file', shot.path, filename: 'hf_check.jpg'));
 
       final hfStreamed = await hfReq.send().timeout(const Duration(seconds: 90));
       final hfResp = await http.Response.fromStream(hfStreamed);
@@ -211,8 +214,9 @@ class _CameraAndUploadPageState extends State<CameraAndUploadPage> {
       // ---------------------------------------------------
       // 2. KIRIM KE GOOGLE CLOUD (Untuk Simpan Data)
       // ---------------------------------------------------
-      // Kita kirim Foto + Data Anak + Hasil AI tadi ke Cloud Run
-      final cloudUri = Uri.parse('$cloudBaseUrl/measure'); // Atau endpoint '/save' jika kamu ubah
+      // Cloud Run Python kamu sepertinya pakai endpoint /measure dan key 'image'
+      // Jadi bagian ini tidak perlu diubah ke 'file' (kecuali backend python kamu juga diubah)
+      final cloudUri = Uri.parse('$cloudBaseUrl/measure');
 
       final cloudReq = http.MultipartRequest('POST', cloudUri)
         ..fields['name'] = widget.childName
@@ -220,6 +224,7 @@ class _CameraAndUploadPageState extends State<CameraAndUploadPage> {
       // Kirim hasil AI ke Cloud supaya disimpan
         ..fields['ai_label'] = aiResult['label'].toString()
         ..fields['ai_confidence'] = aiResult['confidence'].toString()
+      // Ke Cloud Run Python tetap pakai 'image' (sesuai backend flask)
         ..files.add(await http.MultipartFile.fromPath('image', shot.path, filename: 'capture.jpg'));
 
       final cloudStreamed = await cloudReq.send().timeout(const Duration(seconds: 60));
@@ -232,8 +237,6 @@ class _CameraAndUploadPageState extends State<CameraAndUploadPage> {
       // ---------------------------------------------------
       // 3. GABUNGKAN DATA UNTUK TAMPILAN
       // ---------------------------------------------------
-      // Data 'photo_url' didapat dari Cloud (karena cloud yg upload ke storage)
-      // Data 'prediction' (probs) didapat dari HF (karena HF yg hitung)
       final Map<String, dynamic> cloudData = jsonDecode(cloudResp.body) as Map<String, dynamic>;
 
       // Kita bikin Map gabungan untuk HeightResult
@@ -292,7 +295,7 @@ class _CameraAndUploadPageState extends State<CameraAndUploadPage> {
                   children: [
                     const CircularProgressIndicator(),
                     const SizedBox(height: 16),
-                    Text(_statusText, style: const TextStyle(color: Colors.white, fontSize: 16)), // Teks berubah sesuai proses
+                    Text(_statusText, style: const TextStyle(color: Colors.white, fontSize: 16)),
                     const SizedBox(height: 4),
                     const Text("(Mohon tunggu sebentar)", style: TextStyle(color: Colors.white70, fontSize: 12)),
                   ],
@@ -343,11 +346,9 @@ class ResultPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Cek Status untuk warna teks
     final bool isStunting = result.status.toLowerCase().contains("stunt");
     final Color statusColor = isStunting ? Colors.red : Colors.green;
 
-    // 2. Logic Penentuan Gambar (Server URL vs Lokal)
     ImageProvider imageProvider;
     if (result.imageUrl != null && result.imageUrl!.isNotEmpty) {
       imageProvider = NetworkImage(result.imageUrl!);
@@ -360,7 +361,6 @@ class ResultPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          // TAMPILAN GAMBAR
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: Image(
@@ -382,7 +382,6 @@ class ResultPage extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // KARTU HASIL
           Card(
             elevation: 4,
             child: Padding(
@@ -402,7 +401,6 @@ class ResultPage extends StatelessWidget {
                   ),
                   const Divider(height: 30),
 
-                  // TABEL DATA
                   Table(
                     defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                     children: [
@@ -415,7 +413,6 @@ class ResultPage extends StatelessWidget {
                         SizedBox(height: 15)
                       ]),
 
-                      // MENAMPILKAN PROBABILITAS (Looping)
                       ...List.generate(result.probabilities.length, (index) {
                         String label = (index == 0) ? "Peluang Normal" : "Peluang Stunting";
                         double value = result.probabilities[index] * 100;
@@ -429,7 +426,6 @@ class ResultPage extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // TOMBOL RESET
           ElevatedButton.icon(
             onPressed: () => Navigator.pushAndRemoveUntil(
                 context,
@@ -449,7 +445,6 @@ class ResultPage extends StatelessWidget {
     );
   }
 
-  // Widget baris tabel helper
   TableRow _row(String label, String value) {
     return TableRow(children: [
       Padding(
