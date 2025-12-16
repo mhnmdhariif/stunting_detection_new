@@ -1,4 +1,4 @@
-\// File: lib/height_result.dart
+// File: lib/height_result.dart
 
 class HeightResult {
 final String status;
@@ -14,13 +14,13 @@ required this.probabilities,
 });
 
 factory HeightResult.fromMap(Map<String, dynamic> json) {
-// Helper untuk konversi list dynamic ke list double
-List<double> parseProbs(dynamic val) {
-if (val is List) {
-return val.map((e) => (e ?? 0.0).toDouble()).toList();
-}
-return [];
-}
+  // Helper untuk konversi list dynamic ke list double
+  List<double> parseProbs(dynamic val) {
+    if (val is List) {
+      return (val as List).cast<num>().map((e) => e.toDouble()).toList();
+    }
+    return [];
+  }
 
 return HeightResult(
 status: json['label']?.toString() ?? 'Unknown',

@@ -20,7 +20,6 @@ void main() => runApp(const StuntingApp());
 const hfBaseUrl = 'https://syahhh01-stunting-detector-app.hf.space/predict-image';
 
 // 2. URL GOOGLE CLOUD (Untuk Database & Storage)
-// Ini mengarah ke backend Python Cloud Run kamu
 const cloudBaseUrl = 'https://stunting-server-376046612572.us-central1.run.app';
 
 class StuntingApp extends StatelessWidget {
@@ -346,8 +345,13 @@ class ResultPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isStunting = result.status.toLowerCase().contains("stunt");
-    final Color statusColor = isStunting ? Colors.red : Colors.green;
+    final double normalProb = result.probabilities[1];
+    final double stuntingProb = result.probabilities[0];
+
+    final bool isStuntingFinal = stuntingProb > normalProb;
+    final String finalStatus = isStuntingFinal ? 'STUNTING' : 'NORMAL';
+
+    final Color statusColor = isStuntingFinal ? Colors.red : Colors.green;
 
     ImageProvider imageProvider;
     if (result.imageUrl != null && result.imageUrl!.isNotEmpty) {
@@ -391,7 +395,7 @@ class ResultPage extends StatelessWidget {
                   Text("Status Gizi", style: Theme.of(context).textTheme.labelLarge),
                   const SizedBox(height: 4),
                   Text(
-                    result.status.toUpperCase(),
+                    finalStatus.toUpperCase(),
                     style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -406,18 +410,21 @@ class ResultPage extends StatelessWidget {
                     children: [
                       _row('Nama Anak', name),
                       _row('Umur', '$age Tahun'),
-                      _row('Akurasi AI', '${result.confidence.toStringAsFixed(1)} %'),
+                      _row('Akurasi AI', '${(result.confidence * 100).toStringAsFixed(1)} %'),
 
                       const TableRow(children: [
                         SizedBox(height: 15),
                         SizedBox(height: 15)
                       ]),
 
-                      ...List.generate(result.probabilities.length, (index) {
-                        String label = (index == 0) ? "Peluang Normal" : "Peluang Stunting";
-                        double value = result.probabilities[index] * 100;
-                        return _row(label, '${value.toStringAsFixed(1)} %');
-                      }),
+                      _row(
+                          'Peluang Stunting',
+                          '${(result.probabilities[0] * 100).toStringAsFixed(1)} %'
+                      ),
+                      _row(
+                          'Peluang Normal',
+                          '${(result.probabilities[1] * 100).toStringAsFixed(1)} %'
+                      ),
                     ],
                   ),
                 ],
